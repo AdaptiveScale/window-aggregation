@@ -33,6 +33,7 @@ import io.cdap.cdap.etl.api.batch.SparkExecutionPluginContext;
 import io.cdap.cdap.etl.api.batch.SparkPluginContext;
 import io.cdap.cdap.etl.api.lineage.field.FieldOperation;
 import io.cdap.cdap.etl.api.lineage.field.FieldTransformOperation;
+import io.cdap.plugin.function.DiscretePercentile;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.sql.Column;
@@ -283,11 +284,17 @@ public class WindowAggregation extends SparkCompute<StructuredRecord, Structured
 
     List<WindowAggregationConfig.FunctionInfo> aggregatesData = config.getAggregates();
 
+    //todo register UDAF
+    sqlContext.udf().register("DISCRETE_PERCENTILE", new DiscretePercentile());
+
+
     for (WindowAggregationConfig.FunctionInfo aggregatesDatum : aggregatesData) {
       data = apply(aggregatesDatum, data, spec);
     }
 
+
     JavaRDD<StructuredRecord> rowJavaRDD = data.javaRDD().map(new RowToRecord(outputSchema));
+
 
     String numberOfPartitionsString = config.getNumberOfPartitions();
 
@@ -297,7 +304,7 @@ public class WindowAggregation extends SparkCompute<StructuredRecord, Structured
     }
 
     return sparkExecutionPluginContext.getSparkContext().parallelize(rowJavaRDD.collect(),
-                                                                   Integer.parseInt(numberOfPartitionsString));
+                                                                     Integer.parseInt(numberOfPartitionsString));
   }
 
   private Dataset<Row> apply(WindowAggregationConfig.FunctionInfo data, Dataset<Row> dataFrame,
@@ -327,6 +334,13 @@ public class WindowAggregation extends SparkCompute<StructuredRecord, Structured
         String arg = args[0];
         Column lit = functions.lit(arg);
         return functions.callUDF("percentile", functions.col(data.getFieldName()), lit);
+      }
+      case DISCRETE_PERCENTILE: {
+        checkFunctionArguments(args, 1, "Discrete Percentile");
+        String arg = args[0];
+        Column lit = functions.lit(arg);
+        return functions.callUDF("DISCRETE_PERCENTILE");
+//        return functions.callUDF("DISCRETE_PERCENTILE", functions.col(data.getFieldName()), lit);
       }
       case LEAD: {
         checkFunctionArguments(args, 1, "LEAD");
